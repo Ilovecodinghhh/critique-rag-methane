@@ -1,0 +1,33 @@
+# Generated data (rebuild with ingest_papers.py)
+chroma_db/
+all_chunks.json
+chunk_metadata.json
+bm25_index.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Review outputs (regeneratable)
+review_results.json
