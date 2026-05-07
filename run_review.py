@@ -26,6 +26,7 @@ if env_path.exists():
                 os.environ.setdefault(key.strip(), value.strip())
 
 from reviewer_agent import ReviewerAgent, MODEL_PARAMETERS
+from llm_client import list_providers
 import argparse
 
 
@@ -39,16 +40,32 @@ Examples:
   python3 run_review.py --mode single --param "Cl sink"
   python3 run_review.py --mode parameter --output results.json
   python3 run_review.py --list-params                  # Show all parameters
+  python3 run_review.py --provider openai --model gpt-4o
+  python3 run_review.py --list-providers               # Show supported LLM providers
         """
     )
     parser.add_argument("--mode", choices=["full", "parameter", "single"],
                        default="full", help="Review mode (default: full)")
     parser.add_argument("--param", type=str, help="Parameter name substring (for --mode single)")
+    parser.add_argument("--provider", type=str, help="LLM provider (anthropic, openai, gemini, deepseek, kimi, minimax, glm)")
     parser.add_argument("--model", type=str, default=None, help="LLM model override")
     parser.add_argument("--output", type=str, help="Output file path")
     parser.add_argument("--list-params", action="store_true", help="List all reviewable parameters")
+    parser.add_argument("--list-providers", action="store_true", help="List all supported LLM providers")
     
     args = parser.parse_args()
+    
+    if args.list_providers:
+        providers = list_providers()
+        print("Supported LLM Providers:")
+        print("=" * 70)
+        for provider_id, info in providers.items():
+            print(f"  {provider_id:12s} — {info['name']}")
+            print(f"               API Key: {info['env_key']}")
+            print(f"               Default Model: {info['default_model']}")
+            print()
+        print("Set LLM_PROVIDER in .env or use --provider flag")
+        return
     
     if args.list_params:
         print("Reviewable Parameters:")
@@ -60,7 +77,7 @@ Examples:
             print()
         return
     
-    agent = ReviewerAgent(model=args.model)
+    agent = ReviewerAgent(model=args.model, provider=args.provider)
     
     if args.mode == "full":
         review = agent.full_review()

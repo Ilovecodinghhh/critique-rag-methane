@@ -84,8 +84,20 @@ This system:
 ### Prerequisites
 
 - Python 3.10+
-- An Anthropic API key (or compatible proxy)
+- An API key for at least one supported LLM provider (see below)
 - ~2 GB disk space (papers + embeddings)
+
+### Supported LLM Providers
+
+| Provider | Env Variable | Default Model | Notes |
+|----------|-------------|---------------|-------|
+| **Anthropic** (Claude) | `ANTHROPIC_API_KEY` | `claude-sonnet-4-20250514` | Original provider |
+| **OpenAI** (ChatGPT) | `OPENAI_API_KEY` | `gpt-4o` | |
+| **Google Gemini** | `GEMINI_API_KEY` | `gemini-2.0-flash` | Via OpenAI-compatible endpoint |
+| **DeepSeek** | `DEEPSEEK_API_KEY` | `deepseek-chat` | |
+| **Kimi** (Moonshot AI) | `KIMI_API_KEY` | `moonshot-v1-128k` | 128k context |
+| **MiniMax** | `MINIMAX_API_KEY` | `MiniMax-Text-01` | |
+| **GLM** (Zhipu AI) | `GLM_API_KEY` | `glm-4-plus` | ChatGLM series |
 
 ### 1. Clone and Set Up
 
@@ -95,7 +107,15 @@ cd critique-rag-methane
 
 # Copy the environment template and add your API key
 cp .env.example .env
-nano .env   # Set ANTHROPIC_API_KEY=your-key-here
+nano .env   # Set LLM_PROVIDER and the corresponding API key
+
+# Example for OpenAI:
+# LLM_PROVIDER=openai
+# OPENAI_API_KEY=sk-your-key-here
+
+# Example for Anthropic (default):
+# LLM_PROVIDER=anthropic
+# ANTHROPIC_API_KEY=your-key-here
 
 # If paper repos are private, also set:
 # export GITHUB_TOKEN=ghp_your_token_here
@@ -116,6 +136,14 @@ The setup script will:
 # Full comprehensive review (all parameters, one LLM call)
 python3 run_review.py --mode full
 
+# Use a specific provider
+python3 run_review.py --provider openai --model gpt-4o
+python3 run_review.py --provider gemini --model gemini-2.0-flash
+python3 run_review.py --provider deepseek
+python3 run_review.py --provider kimi
+python3 run_review.py --provider minimax
+python3 run_review.py --provider glm
+
 # Review a specific parameter
 python3 run_review.py --mode single --param "OH KIE"
 
@@ -124,6 +152,9 @@ python3 run_review.py --mode parameter
 
 # List all reviewable parameters
 python3 run_review.py --list-params
+
+# List all supported LLM providers
+python3 run_review.py --list-providers
 ```
 
 ---
@@ -145,18 +176,26 @@ python3 run_review.py [OPTIONS]
 
   --mode {full,parameter,single}   Review mode (default: full)
   --param TEXT                     Parameter name substring (for --mode single)
-  --model TEXT                     Override LLM model (e.g., claude-opus-4-6)
+  --provider TEXT                  LLM provider (anthropic, openai, gemini, deepseek, kimi, minimax, glm)
+  --model TEXT                     Override LLM model (e.g., gpt-4o, gemini-2.0-flash)
   --output PATH                   Custom output path
   --list-params                   Show all 21 reviewable parameters
+  --list-providers                Show all supported LLM providers
 ```
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | *(required)* | Your Anthropic API key |
-| `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | API endpoint (for proxies) |
-| `REVIEWER_MODEL` | `claude-sonnet-4-20250514` | Default LLM model |
+| `LLM_PROVIDER` | `anthropic` | LLM provider to use |
+| `ANTHROPIC_API_KEY` | *(required if provider=anthropic)* | Anthropic API key |
+| `OPENAI_API_KEY` | *(required if provider=openai)* | OpenAI API key |
+| `GEMINI_API_KEY` | *(required if provider=gemini)* | Google Gemini API key |
+| `DEEPSEEK_API_KEY` | *(required if provider=deepseek)* | DeepSeek API key |
+| `KIMI_API_KEY` | *(required if provider=kimi)* | Moonshot AI API key |
+| `MINIMAX_API_KEY` | *(required if provider=minimax)* | MiniMax API key |
+| `GLM_API_KEY` | *(required if provider=glm)* | Zhipu AI API key |
+| `REVIEWER_MODEL` | *(provider default)* | Override the default model |
 | `GITHUB_TOKEN` | *(optional)* | For cloning private paper repos |
 
 ---
@@ -173,6 +212,7 @@ critique-rag-methane/
 │
 ├── ingest_papers.py          # Paper chunking + indexing pipeline
 ├── search_engine.py          # Hybrid vector + keyword search
+├── llm_client.py             # Unified multi-provider LLM client
 ├── reviewer_agent.py         # LLM reviewer with 21 parameter definitions
 ├── run_review.py             # CLI entry point
 │
@@ -357,10 +397,10 @@ When adding papers to the knowledge base:
 
 ## Troubleshooting
 
-### `ANTHROPIC_API_KEY not set`
+### `ANTHROPIC_API_KEY not set` / API key errors
 ```bash
 cp .env.example .env
-nano .env  # Add your key
+nano .env  # Set LLM_PROVIDER and the corresponding API key
 ```
 
 ### `torch`/`torchvision` version mismatch
@@ -386,7 +426,8 @@ The parameter-by-parameter mode makes 21 API calls. If rate-limited, switch to `
 | `chromadb` | Vector database for semantic search |
 | `sentence-transformers` | Local embedding model (all-MiniLM-L6-v2) |
 | `rank-bm25` | BM25 keyword search |
-| `anthropic` | Claude API client |
+| `anthropic` | Anthropic Claude API client |
+| `openai` | OpenAI API client (also used for Gemini, DeepSeek, Kimi, MiniMax, GLM) |
 | `numpy` | Numerical operations |
 | `torch` + `transformers` | Backend for sentence-transformers |
 

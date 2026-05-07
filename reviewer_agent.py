@@ -14,8 +14,8 @@ import os
 from pathlib import Path
 from typing import List, Dict, Optional
 
-import anthropic
 from search_engine import HybridSearchEngine
+from llm_client import LLMClient, PROVIDERS
 
 BASE_DIR = Path(__file__).resolve().parent
 MY_MODEL_PATH = BASE_DIR / "my_model.md"
@@ -26,16 +26,18 @@ MY_MODEL_PATH = BASE_DIR / "my_model.md"
 # ---------------------------------------------------------------------------
 def get_config():
     """Load configuration from environment variables."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
+    provider = os.environ.get("LLM_PROVIDER", "anthropic").lower()
+    model = os.environ.get("REVIEWER_MODEL")  # None means use provider default
+
+    # Backward compatibility: if ANTHROPIC_API_KEY is set and no LLM_PROVIDER, use anthropic
+    if provider not in PROVIDERS:
         raise EnvironmentError(
-            "ANTHROPIC_API_KEY not set. Copy .env.example to .env and fill in your key.\n"
-            "  cp .env.example .env && nano .env"
+            f"Unknown LLM_PROVIDER '{provider}'. Supported: {list(PROVIDERS.keys())}"
         )
+
     return {
-        "api_key": api_key,
-        "base_url": os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
-        "model": os.environ.get("REVIEWER_MODEL", "claude-sonnet-4-20250514"),
+        "provider": provider,
+        "model": model,
     }
 
 
@@ -344,18 +346,16 @@ ranking the top 5 most impactful changes.
 class ReviewerAgent:
     """Peer Reviewer Agent using hybrid RAG and LLM."""
     
-    def __init__(self, model: str = None):
+    def __init__(self, model: str = None, provider: str = None):
         self.search = HybridSearchEngine()
         self.model_description = load_model_description()
         
         config = get_config()
-        self.model = model or config["model"]
+        provider = provider or config["provider"]
+        model = model or config["model"]
         
-        self.client = anthropic.Anthropic(
-            api_key=config["api_key"],
-            base_url=config["base_url"],
-        )
-        print(f"  Reviewer Agent initialized with model: {self.model}")
+        self.llm = LLMClient(provider=provider, model=model)
+        print(f"  Reviewer Agent initialized with: {self.llm.provider_name} ({self.llm.model})")
     
     def review_parameter(self, param: Dict, verbose: bool = True) -> str:
         """Review a single model parameter against the literature."""
@@ -419,9 +419,8 @@ class ReviewerAgent:
             retrieved_context=retrieved_context,
         )
         
-        # Call LLM via Anthropic SDK
-        response = self.client.messages.create(
-            model=self.model,
+        # Call LLM
+        response_text = self.llm.chat(
             system=SYSTEM_PROMPT,
             messages=[
                 {"role": "user", "content": prompt},
@@ -430,7 +429,7 @@ class ReviewerAgent:
             temperature=0.1,
         )
         
-        review_text = response.content[0].text
+        review_text = response_text
         
         if verbose:
             print(f"\n{review_text}")
@@ -485,8 +484,7 @@ class ReviewerAgent:
             all_context="\n".join(context_parts),
         )
         
-        response = self.client.messages.create(
-            model=self.model,
+        response_text = self.llm.chat(
             system=SYSTEM_PROMPT,
             messages=[
                 {"role": "user", "content": prompt},
@@ -495,7 +493,7 @@ class ReviewerAgent:
             temperature=0.1,
         )
         
-        review_text = response.content[0].text
+        review_text = response_text
         
         if verbose:
             print(f"\n{review_text}")
@@ -566,13 +564,15 @@ def main():
     parser.add_argument("--mode", choices=["full", "parameter", "single"],
                        default="full", help="Review mode")
     parser.add_argument("--param", type=str, help="Parameter name for single review")
+    parser.add_argument("--provider", type=str, default=None,
+                       help="LLM provider (anthropic, openai, gemini, deepseek, kimi, minimax, glm)")
     parser.add_argument("--model", type=str, default=None,
-                       help="LLM model to use (default: from env or claude-sonnet-4-20250514)")
+                       help="LLM model to use (default: from env or provider default)")
     parser.add_argument("--output", type=str, help="Output file path")
     
     args = parser.parse_args()
     
-    agent = ReviewerAgent(model=args.model)
+    agent = ReviewerAgent(model=args.model, provider=args.provider)
     
     if args.mode == "full":
         review = agent.full_review()
