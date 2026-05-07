@@ -19,9 +19,24 @@ echo "  Critique-Oriented RAG — Setup"
 echo "============================================"
 
 # ── Check Python ──────────────────────────────────────────────────────────
-PYTHON="${PYTHON:-python3}"
-if ! command -v "$PYTHON" &>/dev/null; then
-    echo "ERROR: Python 3 not found. Install Python 3.10+ and try again."
+# Respect PYTHON env var if set; otherwise try python3, then python
+if [ -n "${PYTHON:-}" ]; then
+    :  # use what the user set
+elif command -v python3 &>/dev/null; then
+    PYTHON="python3"
+elif command -v python &>/dev/null; then
+    PYTHON="python"
+else
+    echo "ERROR: Python not found. Install Python 3.10+ (or activate your conda env) and try again."
+    echo "       You can also set the PYTHON env var: PYTHON=/path/to/python bash setup.sh"
+    exit 1
+fi
+
+# Verify it's actually Python 3
+if ! "$PYTHON" -c "import sys; assert sys.version_info >= (3, 10), f'Need Python 3.10+, got {sys.version}'" 2>/dev/null; then
+    echo "ERROR: $PYTHON is not Python 3.10+."
+    echo "       Found: $("$PYTHON" --version 2>&1 || echo 'unknown')"
+    echo "       Please activate a conda env with Python 3.10+ or set PYTHON explicitly."
     exit 1
 fi
 
